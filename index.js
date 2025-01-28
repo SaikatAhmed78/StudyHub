@@ -81,6 +81,27 @@ async function run() {
 
 
 
+        // ROLE BASED (isAdmin)
+        app.get('/users/admin/:email', async (req, res) => {
+            const email = req?.params?.email;
+            // const tokenEmail = req?.user?.email;
+            // if (email !== tokenEmail) return res.status(401).send({ message: "Unauthorized Access" });
+
+            const query = { email: email };
+            const user = await usersCollection.findOne(query);
+            let isAdmin = false;
+            if (user) {
+                isAdmin = user?.role === 'admin';
+            };
+            res.send({ isAdmin });
+
+
+        })
+
+
+
+
+
 
 
         // Start the server
