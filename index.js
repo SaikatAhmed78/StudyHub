@@ -309,6 +309,31 @@ async function run() {
             }
         });
 
+        // all session id
+        app.get('/allsessionIds', async (req, res) => {
+            const result = await sessionsCollection.find().toArray();
+            res.send(result)
+        })
+
+        // getAllMeterials
+        app.get('/getAllMeterials', async (req, res) => {
+            const result = await materialsCollection.find().toArray();
+            res.send(result)
+        })
+
+
+        // meterial display (aftar)
+        app.get('/materials/tutor/:tutorId', async (req, res) => {
+            const tutorId = req.params.tutorId;
+            const materials = await materialsCollection.find({ tutorId }).toArray();
+            res.send(materials);
+
+
+        });
+
+
+        
+
 
 
         // Start the server
