@@ -10,7 +10,12 @@ const port = process.env.PORT || 5000;
 
 // Middleware
 
-app.use(cors())
+app.use(cors(
+    {
+        origin: 'https://educonnect-7c172.web.app',
+        credentials: true
+    }
+))
 app.use(express.json());
 
 // MongoDB setup
@@ -451,7 +456,96 @@ async function run() {
         });
 
 
+        // Fetch booked sessions for a student
+        app.get('/booked-sessions', async (req, res) => {
+            // const email = req.decoded.email; // Token er email toiri korar part ta comment-out
+            const bookedSessions = await bookedSessionsCollection.find({}).toArray(); // Token chara sab session niye ashte hobe
+            res.send(bookedSessions);
+        });
+
+        // Get sessions with pagination
+        app.get('/sessions', async (req, res) => {
+            const { page = 1, limit = 6 } = req.query;
+            const sessions = await sessionsCollection.find()
+                .skip((page - 1) * parseInt(limit))
+                .limit(parseInt(limit))
+                .toArray();
+            res.send(sessions);
+        });
+
+        // Get session details by ID
+        app.get('/sessions/:id', async (req, res) => {
+            const { id: sessionId } = req.params;
         
+            try {
+                const sessionDetails = await sessionsCollection.findOne({ _id: new ObjectId(sessionId) });
+                res.send({ sessionDetails });
+            } catch (error) {
+                console.error('Error fetching session details:', error);
+                res.status(500).send({ error: 'Failed to fetch session details' });
+            }
+        });
+
+
+        // session booknow
+        app.post('/postData/:id', async(req, res) => {
+            const id = req.params.id;
+            const query = {_id: new ObjectId(id)};
+
+            const existedSession = await sessionsCollection.findOne(query);
+            console.log(existedSession)
+            if(existedSession){
+                const result = await bookedSessionsCollection.insertOne(existedSession);
+
+                res.send(result)
+            }
+        });
+
+        app.get('/postData', async(req, res) => {
+            const result = await bookedSessionsCollection.find().toArray();
+            res.send(result)
+        })
+        
+
+        // Create a review for a session
+        app.post('/sessions/:id/review', async (req, res) => {
+            const { rating, reviewText } = req.body;
+            const sessionId = req.params.id;
+
+            const review = {
+                sessionId: new ObjectId(sessionId),
+                rating,
+                reviewText,
+                createdAt: new Date(),
+            };
+
+            const result = await reviewsCollection.insertOne(review);
+            res.send(result);
+        });
+
+
+
+
+
+
+
+
+        // payment admin new
+        app.post('/create-payment-intent', async (req, res) => {
+            const { price } = req.body;
+            const amount = parseInt(price) * 100;
+
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount,
+                currency: 'usd',
+                payment_method_types: ['card']
+            })
+
+            res.send({
+                clientSecret: paymentIntent.client_secret
+            })
+        })
+
 
 
 
