@@ -156,8 +156,39 @@ async function run() {
 
         });
 
-       
+        // status approved(new)
+        app.patch('/sessions/:id/payment-approved', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
 
+            const existingSession = await sessionsCollection.findOne(query);
+
+            if (existingSession.status === 'pending') {
+                const updatedData = {
+                    $set: { status: 'approved' }
+                }
+                const result = await sessionsCollection.updateOne(query, updatedData)
+                res.send(result)
+            }
+        })
+
+        // free approved(new)
+        app.patch('/sessions/:id/free-approved', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+
+            const existingSession = await sessionsCollection.findOne(query);
+
+            if (existingSession.status === 'pending') {
+                const updatedData = {
+                    $set: { status: 'approved' }
+                }
+                const result = await sessionsCollection.updateOne(query, updatedData)
+                res.send(result)
+            }
+        })
+
+        
 
 
         // Start the server
