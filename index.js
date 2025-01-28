@@ -407,7 +407,52 @@ async function run() {
         });
 
 
-       
+        // Update a note
+        app.put('/notes/:id', async (req, res) => {
+            const noteId = req.params.id;
+            const { title, description } = req.body;
+
+            try {
+                const result = await notesCollection.updateOne(
+                    { _id: new ObjectId(noteId) },
+                    { $set: { title, description } }
+                );
+
+                if (result.matchedCount > 0) {
+                    res.status(200).send({ message: 'Note updated successfully' });
+                } else {
+                    res.status(404).send({ message: 'Note not found' });
+                }
+            } catch (error) {
+                res.status(500).send({ message: 'Error updating note', error });
+            }
+        });
+
+
+        // Delete a note
+        app.delete('/notes/:id', async (req, res) => {
+            const noteId = req.params.id;
+
+            try {
+                // Attempt to delete the note from the database
+                const result = await notesCollection.deleteOne({ _id: new ObjectId(noteId) });
+
+                if (result.deletedCount === 0) {
+                    // If no note was deleted, send an error response
+                    return res.status(404).send({ message: 'Note not found' });
+                }
+
+                // If successful, send a success response
+                res.status(200).send({ message: 'Note deleted successfully' });
+            } catch (error) {
+                // Handle unexpected errors
+                res.status(500).send({ message: 'Error deleting note', error });
+            }
+        });
+
+
+        
+
 
 
         // Start the server
