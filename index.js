@@ -81,7 +81,9 @@ async function run() {
 
 
 
-        // ROLE BASED (isAdmin)
+        // ROLE BASED Dashboard
+        
+        // (isAdmin)
         app.get('/users/admin/:email', async (req, res) => {
             const email = req?.params?.email;
             // const tokenEmail = req?.user?.email;
@@ -99,8 +101,62 @@ async function run() {
         })
 
 
+        // ROLE BASED Dashboard
+        // (isTutor)
+        app.get('/users/tutor/:email', async (req, res) => {
+            const email = req?.params?.email;
+            // const tokenEmail = req?.user?.email;
+            // if (email !== tokenEmail) return res.status(401).send({ message: "Unauthorized Access" });
+
+            const query = { email: email };
+            const user = await usersCollection.findOne(query);
+            let isTutor = false;
+            if (user) {
+                isTutor = user?.role === 'tutor';
+            };
+            res.send({ isTutor });
+        })
 
 
+        
+
+        // Approve/Reject session (Admin only)
+
+        // true (aftar) search new
+        app.get('/users', async (req, res) => {
+            const { search } = req.query;
+
+            const filter = search ? {
+                $or: [
+                    { name: { $regex: search, $options: 'i' } },
+                    { email: { $regex: search, $options: 'i' } }
+                ]
+            } : {};
+            const users = await usersCollection.find(filter).toArray();
+            res.send(users);
+
+        });
+
+
+
+        // session reject (new)
+        app.patch('/sessions/:id/reject', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+
+            const existingSession = await sessionsCollection.findOne(query);
+
+            if (existingSession.status === 'pending') {
+                const updatedData = {
+                    $set: { status: 'rejected' }
+                }
+                const result = await sessionsCollection.updateOne(query, updatedData)
+                res.send(result)
+            }
+
+        });
+
+       
 
 
 
