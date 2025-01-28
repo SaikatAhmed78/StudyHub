@@ -220,15 +220,68 @@ async function run() {
             }
         })
 
-        
+        // update dropdown (new)
+        app.patch('/sessionsU/:id/update-drop', async (req, res) => {
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) };
 
+            const existingSession = await sessionsCollection.findOne(query);
 
-
-
-        // Start the server
-        app.get('/', (req, res) => {
-            res.send('EduConnect Server is running...');
+            if (existingSession.status === 'approved') {
+                const updatedData = {
+                    $set: { status: 'pending' }
+                }
+                const result = await sessionsCollection.updateOne(query, updatedData)
+                res.send(result)
+            }
         });
+
+
+
+        app.delete('/sessionsD/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                const query = { _id: new ObjectId(id) };
+                const result = await sessionsCollection.deleteOne(query);
+
+                if (result.deletedCount > 0) {
+                    res.send({ message: 'Session deleted successfully.', result });
+                } else {
+                    res.status(404).send({ message: 'Session not found.' });
+                }
+            } catch (error) {
+                console.error('Error deleting session:', error);
+                res.status(500).send({ message: 'Internal server error.' });
+            }
+        });
+
+        // paid approved
+        app.patch('/paid-approved/:id', async(req, res) => {
+            const id = req.params.id;
+            const query = {_id : new ObjectId(id)};
+            const addFee = req.query.addFee;
+            console.log(addFee)
+
+            const existedSession = await sessionsCollection.findOne(query);
+            if(existedSession){
+                const updetedData = {
+                    $set: {
+                        registrationFee: addFee,
+                        status: 'approved' 
+                    }
+                }
+
+                const result = await sessionsCollection.updateOne(query,updetedData)
+                res.send(result)
+            }
+
+        })
+
+    
+
+
+
 
         app.listen(port, () => {
             console.log(`Server running on port ${port}`);
