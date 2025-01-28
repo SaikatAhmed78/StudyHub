@@ -340,6 +340,7 @@ async function run() {
         });
 
 
+
         // update meterial (new)
         app.patch('/updateMeterial/:id', async (req, res) => {
             const id = req.params.id;
@@ -359,7 +360,33 @@ async function run() {
 
 
 
-        
+
+        // User APIs
+
+        // Get all users (Admin only) new
+        app.get('/users', async (req, res) => {
+            const users = await usersCollection.find().toArray();
+            res.send(users);
+        });
+
+
+        // Update user role (Admin only) new
+        app.patch('/users/:id', async (req, res) => {
+            const id = req.params.id;
+            const { role } = req.body;
+            const query = { _id: new ObjectId(id) };
+
+
+            const updatedDoc = {
+                $set: { role: role }
+            }
+            const result = await usersCollection.updateOne(query, updatedDoc)
+            res.send(result);
+        });
+
+
+
+      
 
 
 
