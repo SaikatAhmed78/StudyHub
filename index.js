@@ -188,7 +188,41 @@ async function run() {
             }
         })
 
+        // update pending(new)
+        app.patch('/sessions/:id/rejected-pending', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+
+            const existingSession = await sessionsCollection.findOne(query);
+
+            if (existingSession.status === 'rejected') {
+                const updatedData = {
+                    $set: { status: 'pending' }
+                }
+                const result = await sessionsCollection.updateOne(query, updatedData)
+                res.send(result)
+            }
+        })
+
+        // approved to pending (new)
+        app.patch('/sessions/:id/approved-pending', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+
+            const existingSession = await sessionsCollection.findOne(query);
+
+            if (existingSession.status === 'approved') {
+                const updatedData = {
+                    $set: { status: 'pending' }
+                }
+                const result = await sessionsCollection.updateOne(query, updatedData)
+                res.send(result)
+            }
+        })
+
         
+
+
 
 
         // Start the server
