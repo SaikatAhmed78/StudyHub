@@ -332,6 +332,33 @@ async function run() {
         });
 
 
+        // aftar
+        app.delete('/materials/:id', async (req, res) => {
+            const id = req.params.id;
+            const result = await materialsCollection.deleteOne({ _id: new ObjectId(id) });
+            res.send(result);
+        });
+
+
+        // update meterial (new)
+        app.patch('/updateMeterial/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+
+            const meterialData = req.body.updatedTitle;
+            const updatedData = {
+                $set: { title: meterialData }
+            }
+
+            const result = await materialsCollection.updateOne(query, updatedData)
+
+            res.send(result)
+
+
+        })
+
+
+
         
 
 
