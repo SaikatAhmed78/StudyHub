@@ -386,8 +386,28 @@ async function run() {
 
 
 
-      
+        // student part start
 
+        // post note
+        app.post('/notes', async (req, res) => {
+            const note = req.body;
+            const result = await notesCollection.insertOne(note);
+            res.send(result);
+        });
+
+
+        // get all notes
+        app.get('/all-notes', async (req, res) => {
+            const email = req.query.email;
+            if (!email) {
+                return res.status(400).send({ message: 'Email query parameter is required' });
+            }
+            const notes = await notesCollection.find({ userEmail: email }).toArray();
+            res.send(notes);
+        });
+
+
+       
 
 
         // Start the server
