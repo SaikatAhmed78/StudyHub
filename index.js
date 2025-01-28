@@ -283,6 +283,39 @@ async function run() {
 
 
 
+        // Material APIs
+
+        // Upload materials (Tutors only)
+        app.post('/upload-material', async (req, res) => {
+            const { title, sessionId, tutorEmail, image, link } = req.body;
+
+
+
+            const materialData = {
+                title,
+                sessionId,
+                tutorEmail,
+                image,
+                link,
+                uploadedAt: new Date()
+            };
+
+            try {
+                const result = await materialsCollection.insertOne(materialData);
+                res.send({ success: true, insertedId: result.insertedId });
+            } catch (error) {
+                console.error("Error uploading material:", error);
+                res.status(500).send({ message: 'Failed to upload material' });
+            }
+        });
+
+
+
+        // Start the server
+        app.get('/', (req, res) => {
+            res.send('EduConnect Server is running...');
+        });
+
         app.listen(port, () => {
             console.log(`Server running on port ${port}`);
         });
