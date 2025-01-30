@@ -1,6 +1,7 @@
-require('dotenv').config();
-const express = require('express');
 const cors = require('cors');
+require('dotenv').config();
+const cookieParser = require('cookie-parser');
+const express = require('express');
 const jwt = require('jsonwebtoken');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
@@ -8,15 +9,19 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Middleware
+// Middleware 
 
 app.use(cors(
     {
-        origin: 'https://educonnect-7c172.web.app',
+        origin: [
+            'https://educonnect-7c172.web.app',
+            'http://localhost:5173'
+        ],
         credentials: true
     }
 ))
 app.use(express.json());
+app.use(cookieParser())
 
 // MongoDB setup
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.1bvy3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -31,8 +36,8 @@ const client = new MongoClient(uri, {
 
 async function run() {
     try {
-        await client.connect();
-        console.log('Connected to MongoDB');
+        // await client.connect();
+        // console.log('Connected to MongoDB');
 
         const database = client.db("eduConnect");
         const usersCollection = database.collection("users");
@@ -73,21 +78,31 @@ async function run() {
             res.send(result);
         });
 
-        // Login and issue JWT
-        app.post('/login', async (req, res) => {
-            const { email, password } = req.body;
-            const user = await usersCollection.findOne({ email, password });
-            if (!user) {
-                return res.status(401).send({ message: 'Invalid credentials' });
-            }
-            const token = jwt.sign({ email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
-            res.send({ token });
+
+        // tutor home page information page
+        app.get('/information', async (req, res) => {
+            const query = { role: 'tutor' };
+            const result = await usersCollection.find(query).toArray();
+            res.send(result);
         });
 
 
 
+        // Login and issue JWT
+        // app.post('/login', async (req, res) => {
+        //     const { email, password } = req.body;
+        //     const user = await usersCollection.findOne({ email, password });
+        //     if (!user) {
+        //         return res.status(401).send({ message: 'Invalid credentials' });
+        //     }
+
+        //     res.send({ token });
+        // });
+
+
+
         // ROLE BASED Dashboard
-        
+
         // (isAdmin)
         app.get('/users/admin/:email', async (req, res) => {
             const email = req?.params?.email;
@@ -123,7 +138,7 @@ async function run() {
         })
 
 
-        
+
 
         // Approve/Reject session (Admin only)
 
@@ -262,33 +277,67 @@ async function run() {
         });
 
         // paid approved
-        app.patch('/paid-approved/:id', async(req, res) => {
+        app.patch('/paid-approved/:id', async (req, res) => {
             const id = req.params.id;
-            const query = {_id : new ObjectId(id)};
+            const query = { _id: new ObjectId(id) };
             const addFee = req.query.addFee;
             console.log(addFee)
 
             const existedSession = await sessionsCollection.findOne(query);
-            if(existedSession){
+            if (existedSession) {
                 const updetedData = {
                     $set: {
                         registrationFee: addFee,
-                        status: 'approved' 
+                        status: 'approved'
                     }
                 }
 
-                const result = await sessionsCollection.updateOne(query,updetedData)
+                const result = await sessionsCollection.updateOne(query, updetedData)
                 res.send(result)
             }
 
         })
 
-    
+
 
 
 
 
         // Material APIs
+
+        // upload session
+        app.post('/create-session', async (req, res) => {
+            const { title, tutorName, tutorEmail, description, registrationStartDate, registrationEndDate, classStartDate, classEndDate, duration, image } = req.body;
+        
+            // Create a study session data object
+            const sessionData = {
+                title,
+                tutorName,
+                tutorEmail,
+                description,
+                registrationStartDate,
+                registrationEndDate,
+                classStartDate,
+                classEndDate,
+                duration,
+                image,
+                status: "pending", // Initial status
+                registrationFee: 0, // Default registration fee
+                createdAt: new Date(),
+            };
+        
+            const result = await sessionsCollection.insertOne(sessionData);
+        
+            
+            if (result.acknowledged) {
+                res.send({ success: true, insertedId: result.insertedId });
+            } else {
+                res.status(500).send({ message: 'Failed to create session' });
+            }
+        });
+        
+
+
 
         // Upload materials (Tutors only)
         app.post('/upload-material', async (req, res) => {
@@ -335,6 +384,28 @@ async function run() {
 
 
         });
+
+
+        // new ViewStudyMaterials 
+        app.get('/materials/:sessionId', async (req, res) => {
+            const sessionId = req.params.sessionId;
+            try {
+                const materials = await materialsCollection.find({ sessionId }).toArray();
+                res.send(materials);
+            } catch (error) {
+                res.status(500).send({ error: 'Failed to fetch materials' });
+            }
+        });
+
+        app.get('/booked-sessions', async (req, res) => {
+            try {
+                const bookedSessions = await bookedSessionsCollection.find({}).toArray();
+                res.send(bookedSessions);
+            } catch (error) {
+                res.status(500).send({ error: 'Failed to fetch booked sessions' });
+            }
+        });
+
 
 
         // aftar
@@ -456,13 +527,6 @@ async function run() {
         });
 
 
-        // Fetch booked sessions for a student
-        app.get('/booked-sessions', async (req, res) => {
-            // const email = req.decoded.email; // Token er email toiri korar part ta comment-out
-            const bookedSessions = await bookedSessionsCollection.find({}).toArray(); // Token chara sab session niye ashte hobe
-            res.send(bookedSessions);
-        });
-
         // Get sessions with pagination
         app.get('/sessions', async (req, res) => {
             const { page = 1, limit = 6 } = req.query;
@@ -473,12 +537,65 @@ async function run() {
             res.send(sessions);
         });
 
+        // all sessions tutor & admin
+        app.get('/all-sessions-tutor', async (req, res) => {
+            const page = parseInt(req.query.page) || 1; 
+            const limit = parseInt(req.query.limit) || 6; 
+            const skip = (page - 1) * limit; 
+        
+            try {
+                const totalSessions = await sessionsCollection.countDocuments();
+                const sessions = await sessionsCollection.find().skip(skip).limit(limit).toArray();
+                
+                res.send({
+                    sessions,
+                    totalPages: Math.ceil(totalSessions / limit),
+                    currentPage: page
+                });
+            } catch (error) {
+                res.status(500).send({ error: "Unable to fetch sessions" });
+            }
+        });
+        
+        
+
+
+        //   allSessions route with pagination
+        app.get('/allSessions', async (req, res) => {
+            try {
+
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 6;
+                const skip = (page - 1) * limit;
+
+                const result = await sessionsCollection
+                    .find()
+                    .skip(skip)
+                    .limit(limit)
+                    .toArray();
+
+
+                const totalSessions = await sessionsCollection.countDocuments();
+                res.send({
+                    sessions: result,
+                    totalSessions,
+                    currentPage: page,
+                    totalPages: Math.ceil(totalSessions / limit)
+                });
+            } catch (error) {
+                console.error("Database Fetch Error:", error);
+                res.status(500).send({ message: "Server Error", error });
+            }
+        });
+
+
+
         // Get session details by ID
         app.get('/sessions/:id', async (req, res) => {
             const { id: sessionId } = req.params;
-        
+
             try {
-                const sessionDetails = await sessionsCollection.findOne({ _id: new ObjectId(sessionId) });
+                const sessionDetails = await sessionsCollection.findOne({_id: new ObjectId(sessionId) });
                 res.send({ sessionDetails });
             } catch (error) {
                 console.error('Error fetching session details:', error);
@@ -488,24 +605,24 @@ async function run() {
 
 
         // session booknow
-        app.post('/postData/:id', async(req, res) => {
+        app.post('/postData/:id', async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
+            const query = { _id: new ObjectId(id) };
 
             const existedSession = await sessionsCollection.findOne(query);
             console.log(existedSession)
-            if(existedSession){
+            if (existedSession) {
                 const result = await bookedSessionsCollection.insertOne(existedSession);
 
                 res.send(result)
             }
         });
 
-        app.get('/postData', async(req, res) => {
+        app.get('/postData', async (req, res) => {
             const result = await bookedSessionsCollection.find().toArray();
             res.send(result)
         })
-        
+
 
         // Create a review for a session
         app.post('/sessions/:id/review', async (req, res) => {
@@ -522,9 +639,6 @@ async function run() {
             const result = await reviewsCollection.insertOne(review);
             res.send(result);
         });
-
-
-
 
 
 
