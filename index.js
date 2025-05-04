@@ -17,11 +17,26 @@ app.use(cors(
             'https://educonnect-7c172.web.app',
             'http://localhost:5173'
         ],
-        credentials: true
+        credentials: true,
+        optionsSuccessStatus: 200
     }
 ))
 app.use(express.json());
 app.use(cookieParser())
+
+// verifyToken middleware
+const verifyToken = async (req, res, next) => {
+    const token = req?.cookies?.token;
+
+    if (!token) return res.status(401).send({ message: "Unauthorized Access" });
+
+    jwt.verify(token, process.env.JWT_SECRET, (error, decoded) => {
+        if (error) return res.status(401).send({ message: "Unauthorized Access" });
+        req.user = decoded;
+
+        next();
+    })
+}
 
 // MongoDB setup
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.1bvy3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -48,22 +63,29 @@ async function run() {
         const notesCollection = database.collection("notes");
 
 
-        // Utility function to verify JWT
-        function verifyJWT(req, res, next) {
-            const authHeader = req.headers.authorization;
-            if (!authHeader) {
-                return res.status(401).send({ message: 'Unauthorized access' });
-            }
+        // create-token apis
+        app.post('/create-token', async (req, res) => {
+            const userInfo = req?.body;
 
-            const token = authHeader.split(' ')[1];
-            jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-                if (err) {
-                    return res.status(403).send({ message: 'Forbidden access' });
-                }
-                req.decoded = decoded;
-                next();
-            });
-        }
+            const token = jwt.sign(userInfo, process.env.JWT_SECRET, { expiresIn: '12h' });
+
+            res.cookie('token', token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict'
+            }).send({ success: true })
+        });
+
+
+        // token clear
+        app.post('/logout', async (req, res) => {
+            res.clearCookie('token', {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict'
+            }).send({ success: true })
+        })
+
 
         // Authentication APIs
 
@@ -88,26 +110,14 @@ async function run() {
 
 
 
-        // Login and issue JWT
-        // app.post('/login', async (req, res) => {
-        //     const { email, password } = req.body;
-        //     const user = await usersCollection.findOne({ email, password });
-        //     if (!user) {
-        //         return res.status(401).send({ message: 'Invalid credentials' });
-        //     }
-
-        //     res.send({ token });
-        // });
-
-
-
         // ROLE BASED Dashboard
 
         // (isAdmin)
-        app.get('/users/admin/:email', async (req, res) => {
+        app.get('/users/admin/:email', verifyToken, async (req, res) => {
             const email = req?.params?.email;
-            // const tokenEmail = req?.user?.email;
-            // if (email !== tokenEmail) return res.status(401).send({ message: "Unauthorized Access" });
+            const tokenEmail = req?.user?.email;
+            const queryEmail = req.query.email;
+            if (queryEmail !== tokenEmail) return res.status(401).send({ message: "Unauthorized Access" });
 
             const query = { email: email };
             const user = await usersCollection.findOne(query);
@@ -123,10 +133,11 @@ async function run() {
 
         // ROLE BASED Dashboard
         // (isTutor)
-        app.get('/users/tutor/:email', async (req, res) => {
+        app.get('/users/tutor/:email', verifyToken, async (req, res) => {
             const email = req?.params?.email;
-            // const tokenEmail = req?.user?.email;
-            // if (email !== tokenEmail) return res.status(401).send({ message: "Unauthorized Access" });
+            const tokenEmail = req?.user?.email;
+            const queryEmail = req.query.email;
+            if (queryEmail !== tokenEmail) return res.status(401).send({ message: "Unauthorized Access" });
 
             const query = { email: email };
             const user = await usersCollection.findOne(query);
@@ -308,7 +319,7 @@ async function run() {
         // upload session
         app.post('/create-session', async (req, res) => {
             const { title, tutorName, tutorEmail, description, registrationStartDate, registrationEndDate, classStartDate, classEndDate, duration, image } = req.body;
-        
+
             // Create a study session data object
             const sessionData = {
                 title,
@@ -321,31 +332,27 @@ async function run() {
                 classEndDate,
                 duration,
                 image,
-                status: "pending", // Initial status
-                registrationFee: 0, // Default registration fee
+                status: "pending",
+                registrationFee: 0,
                 createdAt: new Date(),
             };
-        
+
             const result = await sessionsCollection.insertOne(sessionData);
-        
-            
+
+
             if (result.acknowledged) {
                 res.send({ success: true, insertedId: result.insertedId });
             } else {
                 res.status(500).send({ message: 'Failed to create session' });
             }
         });
-        
+
 
 
 
         // Upload materials (Tutors only)
         app.post('/upload-material', async (req, res) => {
-            const { title, sessionId, tutorEmail, image, link } = req.body;
-
-
-
-            const materialData = {
+            const { title, sessionId, tutorEmail, image, link } = req.body; const materialData = {
                 title,
                 sessionId,
                 tutorEmail,
@@ -537,16 +544,18 @@ async function run() {
             res.send(sessions);
         });
 
+
+
         // all sessions tutor & admin
         app.get('/all-sessions-tutor', async (req, res) => {
-            const page = parseInt(req.query.page) || 1; 
-            const limit = parseInt(req.query.limit) || 6; 
-            const skip = (page - 1) * limit; 
-        
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 6;
+            const skip = (page - 1) * limit;
+
             try {
                 const totalSessions = await sessionsCollection.countDocuments();
                 const sessions = await sessionsCollection.find().skip(skip).limit(limit).toArray();
-                
+
                 res.send({
                     sessions,
                     totalPages: Math.ceil(totalSessions / limit),
@@ -556,31 +565,44 @@ async function run() {
                 res.status(500).send({ error: "Unable to fetch sessions" });
             }
         });
-        
-        
 
 
-        //   allSessions route with pagination
+        // polising
+        app.get('/all-sessions-no-pagination', async (req, res) => {
+            try {
+                const sessions = await sessionsCollection.find().toArray();
+                res.send({
+                    sessions,
+                });
+            } catch (error) {
+                res.status(500).send({ error: "Unable to fetch sessions" });
+            }
+        });
+
+
+
+
+
         app.get('/allSessions', async (req, res) => {
             try {
-
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 6;
+                const sortOrder = req.query.sort === 'desc' ? -1 : 1;
                 const skip = (page - 1) * limit;
 
                 const result = await sessionsCollection
                     .find()
+                    .sort({ registrationFee: sortOrder })
                     .skip(skip)
                     .limit(limit)
                     .toArray();
-
 
                 const totalSessions = await sessionsCollection.countDocuments();
                 res.send({
                     sessions: result,
                     totalSessions,
                     currentPage: page,
-                    totalPages: Math.ceil(totalSessions / limit)
+                    totalPages: Math.ceil(totalSessions / limit),
                 });
             } catch (error) {
                 console.error("Database Fetch Error:", error);
@@ -590,12 +612,13 @@ async function run() {
 
 
 
+
         // Get session details by ID
         app.get('/sessions/:id', async (req, res) => {
             const { id: sessionId } = req.params;
 
             try {
-                const sessionDetails = await sessionsCollection.findOne({_id: new ObjectId(sessionId) });
+                const sessionDetails = await sessionsCollection.findOne({ _id: new ObjectId(sessionId) });
                 res.send({ sessionDetails });
             } catch (error) {
                 console.error('Error fetching session details:', error);
@@ -643,6 +666,19 @@ async function run() {
 
 
 
+        // Trending Sessions API (based on most bookings)
+        app.get('/trendingSessions', async (req, res) => {
+            try {
+                const trendingSessions = await sessionsCollection
+                    .find()
+                    .sort({ bookings: -1 }) // Highest booked sessions first
+                    .limit(4)
+                    .toArray();
+                res.send(trendingSessions);
+            } catch (error) {
+                res.status(500).send({ error: 'Failed to fetch trending sessions' });
+            }
+        });
 
         // payment admin new
         app.post('/create-payment-intent', async (req, res) => {
